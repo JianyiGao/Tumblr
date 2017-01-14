@@ -10,9 +10,11 @@ import UIKit
 import AFNetworking
 
 
-class PhotoViewController: UIViewController, UITableViewDelegate, UITableViewDataSource {
+class PhotoViewController: UIViewController, UITableViewDelegate, UITableViewDataSource, UIScrollViewDelegate {
     
     var posts: [NSDictionary] = []
+    var url: NSURL?
+    var isMoreDataLoading = false
 
     @IBOutlet weak var photoTableView: UITableView!
     
@@ -22,7 +24,11 @@ class PhotoViewController: UIViewController, UITableViewDelegate, UITableViewDat
         photoTableView.delegate = self
         photoTableView.dataSource = self
         
-        let url = NSURL(string:"https://api.tumblr.com/v2/blog/humansofnewyork.tumblr.com/posts/photo?api_key=Q6vHoaVm5L1u2ZAW1fqv3Jw48gFzYVg9P0vH0VHl3GVy6quoGV")
+        let refreshControl = UIRefreshControl()
+        refreshControl.addTarget(self, action: #selector(refreshControlAction(_:)), forControlEvents: UIControlEvents.ValueChanged)
+        photoTableView.insertSubview(refreshControl, atIndex: 0)
+        
+        url = NSURL(string:"https://api.tumblr.com/v2/blog/humansofnewyork.tumblr.com/posts/photo?api_key=Q6vHoaVm5L1u2ZAW1fqv3Jw48gFzYVg9P0vH0VHl3GVy6quoGV")
         let request = NSURLRequest(URL: url!)
         let session = NSURLSession(
             configuration: NSURLSessionConfiguration.defaultSessionConfiguration(),
@@ -58,6 +64,63 @@ class PhotoViewController: UIViewController, UITableViewDelegate, UITableViewDat
         // Dispose of any resources that can be recreated.
     }
     
+    func refreshControlAction(refreshControl: UIRefreshControl) {
+        
+        let myRequest = NSURLRequest(URL: url!)
+        let session = NSURLSession(
+            configuration: NSURLSessionConfiguration.defaultSessionConfiguration(),
+            delegate:nil,
+            delegateQueue:NSOperationQueue.mainQueue()
+        )
+        
+        let task : NSURLSessionDataTask = session.dataTaskWithRequest(myRequest, completionHandler: { (data, response, error) in
+            
+            self.photoTableView.reloadData()
+            refreshControl.endRefreshing()
+        });
+        
+        task.resume()
+    }
+    
+    func loadMoreData(){
+        let myRequest = NSURLRequest(URL: url!)
+        let session = NSURLSession(
+            configuration: NSURLSessionConfiguration.defaultSessionConfiguration(),
+            delegate:nil,
+            delegateQueue:NSOperationQueue.mainQueue()
+        )
+        let task : NSURLSessionDataTask = session.dataTaskWithRequest(myRequest, completionHandler: { (data, response, error) in
+            
+            // Update flag
+            self.isMoreDataLoading = false
+            
+            // ... Use the new data to update the data source ...
+            
+            // Reload the tableView now that there is new data
+            self.photoTableView.reloadData()
+            
+            
+        });
+        task.resume()
+    }
+
+
+    func scrollViewDidScroll(scrollView: UIScrollView) {
+        if (!isMoreDataLoading){
+            // Calculate the position of one screen length before the bottom of the results
+            let scrollViewContentHeight = photoTableView.contentSize.height
+            let scrollOffsetThreshold = scrollViewContentHeight - photoTableView.bounds.size.height
+            
+            // When the user has scrolled past the threshold, start requesting
+            if(scrollView.contentOffset.y > scrollOffsetThreshold && photoTableView.dragging) {
+                isMoreDataLoading = true
+                
+                loadMoreData()
+            }
+        }
+    }
+    
+    
     func tableView(tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         tableView.rowHeight = 240
         return posts.count
@@ -78,15 +141,31 @@ class PhotoViewController: UIViewController, UITableViewDelegate, UITableViewDat
         
         return cell
     }
+    
+    func tableView(tableView: UITableView, didSelectRowAtIndexPath indexPath: NSIndexPath) {
+        tableView.deselectRowAtIndexPath(indexPath, animated: true)
+            }
 
-    /*
+    
     // MARK: - Navigation
 
     // In a storyboard-based application, you will often want to do a little preparation before navigation
     override func prepareForSegue(segue: UIStoryboardSegue, sender: AnyObject?) {
+        let destinationViewController = segue.destinationViewController as! PhotoDetailsViewController
+        let indexPath = photoTableView.indexPathForCell(sender as! UITableViewCell)
+        let post = posts[indexPath!.row] as NSDictionary
+        
+        destinationViewController.post = post
+    
+        
+        
         // Get the new view controller using segue.destinationViewController.
         // Pass the selected object to the new view controller.
     }
-    */
+    
 
 }
+
+
+
+
